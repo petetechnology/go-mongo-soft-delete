@@ -1,4 +1,4 @@
-module go-mongo-soft-delete
+module github.com/petetechnology/go-mongo-soft-delete
 
 go 1.23.2
 
