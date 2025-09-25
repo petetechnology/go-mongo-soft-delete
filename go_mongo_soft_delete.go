@@ -37,6 +37,7 @@ type ISoftDeleteMiddleware interface {
 	FindOneAndUpdate(ctx context.Context, filter interface{}, update interface{}, opts ...*options.FindOneAndUpdateOptions) *mongo.SingleResult
 	InsertOne(ctx context.Context, create interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error)
 	InsertMany(ctx context.Context, creates []interface{}, opts ...*options.InsertManyOptions) (*mongo.InsertManyResult, error)
+	CountDocuments(ctx context.Context, filter interface{}, opts ...*options.CountOptions) (int64, error)
 
 	Indexes() mongo.IndexView
 }
@@ -55,6 +56,12 @@ func (m *SoftDeleteMiddleware) Find(ctx context.Context, filter interface{}, opt
 func (m *SoftDeleteMiddleware) FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult {
 	filter = m.addSoftDeleteFilter(filter)
 	return m.Collection.FindOne(ctx, filter, opts...)
+}
+
+// CountDocuments adds a soft delete filter to the query. It ensures that only documents with deleted=false are returned.
+func (m *SoftDeleteMiddleware) CountDocuments(ctx context.Context, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+	filter = m.addSoftDeleteFilter(filter)
+	return m.Collection.CountDocuments(ctx, filter, opts...)
 }
 
 // SoftDeleteOne performs a soft delete operation
