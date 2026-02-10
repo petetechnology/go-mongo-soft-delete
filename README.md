@@ -5,7 +5,7 @@ A Go package that provides soft delete functionality for MongoDB collections.
 ## Installation
 
 ```bash
-go get github.com/yourusername/mongosoftdelete
+go get github.com/petetechnology/go-mongo-soft-delete
 ```
 
 ## Usage
