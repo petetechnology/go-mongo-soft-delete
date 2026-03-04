@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // SoftDeleteModel contains common fields for soft deletion
 type SoftDeleteModel struct {
-	Deleted   bool               `bson:"deleted,omitempty"`
-	DeletedAt primitive.DateTime `bson:"deletedAt,omitempty"`
-	DeletedBy primitive.ObjectID `bson:"deletedBy,omitempty"`
+	Deleted   bool          `bson:"deleted,omitempty"`
+	DeletedAt bson.DateTime `bson:"deletedAt,omitempty"`
+	DeletedBy bson.ObjectID `bson:"deletedBy,omitempty"`
 }
 
 // SoftDeleteMiddleware adds soft delete filter to all queries
@@ -25,19 +24,19 @@ type SoftDeleteMiddleware struct {
 
 // ISoftDeleteMiddleware defines the interface for soft deletion operations
 type ISoftDeleteMiddleware interface {
-	Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
-	FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult
-	SoftDeleteOne(ctx context.Context, filter interface{}, deletedBy primitive.ObjectID) (*mongo.UpdateResult, error)
-	SoftDeleteMany(ctx context.Context, filter interface{}, deletedBy primitive.ObjectID) (*mongo.UpdateResult, error)
-	SoftDeleteByID(ctx context.Context, id primitive.ObjectID, deletedBy primitive.ObjectID) (*mongo.UpdateResult, error)
-	Aggregate(ctx context.Context, pipeline interface{}, opts ...*options.AggregateOptions) (*mongo.Cursor, error)
-	UpdateByID(ctx context.Context, id primitive.ObjectID, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
-	UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
-	UpdateMany(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
-	FindOneAndUpdate(ctx context.Context, filter interface{}, update interface{}, opts ...*options.FindOneAndUpdateOptions) *mongo.SingleResult
-	InsertOne(ctx context.Context, create interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error)
-	InsertMany(ctx context.Context, creates []interface{}, opts ...*options.InsertManyOptions) (*mongo.InsertManyResult, error)
-	CountDocuments(ctx context.Context, filter interface{}, opts ...*options.CountOptions) (int64, error)
+	Find(ctx context.Context, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	FindOne(ctx context.Context, filter interface{}, opts ...options.Lister[options.FindOneOptions]) *mongo.SingleResult
+	SoftDeleteOne(ctx context.Context, filter interface{}, deletedBy bson.ObjectID) (*mongo.UpdateResult, error)
+	SoftDeleteMany(ctx context.Context, filter interface{}, deletedBy bson.ObjectID) (*mongo.UpdateResult, error)
+	SoftDeleteByID(ctx context.Context, id bson.ObjectID, deletedBy bson.ObjectID) (*mongo.UpdateResult, error)
+	Aggregate(ctx context.Context, pipeline interface{}, opts ...options.Lister[options.AggregateOptions]) (*mongo.Cursor, error)
+	UpdateByID(ctx context.Context, id bson.ObjectID, update interface{}, opts ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error)
+	UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error)
+	UpdateMany(ctx context.Context, filter interface{}, update interface{}, opts ...options.Lister[options.UpdateManyOptions]) (*mongo.UpdateResult, error)
+	FindOneAndUpdate(ctx context.Context, filter interface{}, update interface{}, opts ...options.Lister[options.FindOneAndUpdateOptions]) *mongo.SingleResult
+	InsertOne(ctx context.Context, create interface{}, opts ...options.Lister[options.InsertOneOptions]) (*mongo.InsertOneResult, error)
+	InsertMany(ctx context.Context, creates any, opts ...options.Lister[options.InsertManyOptions]) (*mongo.InsertManyResult, error)
+	CountDocuments(ctx context.Context, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
 
 	Indexes() mongo.IndexView
 }
@@ -47,45 +46,44 @@ func New(coll *mongo.Collection) *SoftDeleteMiddleware {
 }
 
 // Find adds a soft delete filter to the query. It ensures that only documents with deleted=false are returned.
-func (m *SoftDeleteMiddleware) Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+func (m *SoftDeleteMiddleware) Find(ctx context.Context, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 	filter = m.addSoftDeleteFilter(filter)
 	return m.Collection.Find(ctx, filter, opts...)
 }
 
 // FindOne adds a soft delete filter to the query. It ensures that only documents with deleted=false are returned.
-func (m *SoftDeleteMiddleware) FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult {
+func (m *SoftDeleteMiddleware) FindOne(ctx context.Context, filter interface{}, opts ...options.Lister[options.FindOneOptions]) *mongo.SingleResult {
 	filter = m.addSoftDeleteFilter(filter)
 	return m.Collection.FindOne(ctx, filter, opts...)
 }
 
 // CountDocuments adds a soft delete filter to the query. It ensures that only documents with deleted=false are returned.
-func (m *SoftDeleteMiddleware) CountDocuments(ctx context.Context, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+func (m *SoftDeleteMiddleware) CountDocuments(ctx context.Context, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
 	filter = m.addSoftDeleteFilter(filter)
 	return m.Collection.CountDocuments(ctx, filter, opts...)
 }
 
 // SoftDeleteOne performs a soft delete operation
-func (m *SoftDeleteMiddleware) SoftDeleteOne(ctx context.Context, filter interface{}, deletedBy primitive.ObjectID) (*mongo.UpdateResult, error) {
+func (m *SoftDeleteMiddleware) SoftDeleteOne(ctx context.Context, filter interface{}, deletedBy bson.ObjectID) (*mongo.UpdateResult, error) {
 	update := m.createSoftDeleteUpdate(deletedBy)
 	return m.Collection.UpdateOne(ctx, filter, update)
 }
 
 // SoftDeleteMany performs a soft delete operation on multiple documents
-func (m *SoftDeleteMiddleware) SoftDeleteMany(ctx context.Context, filter interface{}, deletedBy primitive.ObjectID) (*mongo.UpdateResult, error) {
+func (m *SoftDeleteMiddleware) SoftDeleteMany(ctx context.Context, filter interface{}, deletedBy bson.ObjectID) (*mongo.UpdateResult, error) {
 	update := m.createSoftDeleteUpdate(deletedBy)
 	return m.Collection.UpdateMany(ctx, filter, update)
 }
 
 // SoftDeleteByID performs a soft delete operation on a document by its ID
-func (m *SoftDeleteMiddleware) SoftDeleteByID(ctx context.Context, id primitive.ObjectID, deletedBy primitive.ObjectID) (*mongo.UpdateResult, error) {
+func (m *SoftDeleteMiddleware) SoftDeleteByID(ctx context.Context, id bson.ObjectID, deletedBy bson.ObjectID) (*mongo.UpdateResult, error) {
 	filter := bson.M{"_id": id}
 	update := m.createSoftDeleteUpdate(deletedBy)
 	return m.Collection.UpdateOne(ctx, filter, update)
 }
 
-// Add the new methods to SoftDeleteMiddleware
 // Aggregate adds a soft delete filter to the aggregation pipeline
-func (m *SoftDeleteMiddleware) Aggregate(ctx context.Context, pipeline interface{}, opts ...*options.AggregateOptions) (*mongo.Cursor, error) {
+func (m *SoftDeleteMiddleware) Aggregate(ctx context.Context, pipeline interface{}, opts ...options.Lister[options.AggregateOptions]) (*mongo.Cursor, error) {
 	// Convert pipeline to array if it's not already
 	pipelineArray, ok := pipeline.([]interface{})
 	if !ok {
@@ -113,7 +111,7 @@ func (m *SoftDeleteMiddleware) Aggregate(ctx context.Context, pipeline interface
 }
 
 // UpdateByID updates a single document by ID
-func (m *SoftDeleteMiddleware) UpdateByID(ctx context.Context, id primitive.ObjectID, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
+func (m *SoftDeleteMiddleware) UpdateByID(ctx context.Context, id bson.ObjectID, update interface{}, opts ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error) {
 	filter := bson.M{
 		"_id":     id,
 		"deleted": bson.M{"$ne": true},
@@ -122,31 +120,31 @@ func (m *SoftDeleteMiddleware) UpdateByID(ctx context.Context, id primitive.Obje
 	return m.Collection.UpdateOne(ctx, filter, update, opts...)
 }
 
-// You might also want to add a convenience method for updating non-deleted documents
-func (m *SoftDeleteMiddleware) UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
+// UpdateOne updates a single non-deleted document matching the filter
+func (m *SoftDeleteMiddleware) UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error) {
 	filter = m.addSoftDeleteFilter(filter)
 	return m.Collection.UpdateOne(ctx, filter, update, opts...)
 }
 
-// And a method for updating many documents
-func (m *SoftDeleteMiddleware) UpdateMany(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
+// UpdateMany updates multiple non-deleted documents matching the filter
+func (m *SoftDeleteMiddleware) UpdateMany(ctx context.Context, filter interface{}, update interface{}, opts ...options.Lister[options.UpdateManyOptions]) (*mongo.UpdateResult, error) {
 	filter = m.addSoftDeleteFilter(filter)
 	return m.Collection.UpdateMany(ctx, filter, update, opts...)
 }
 
 // FindOneAndUpdate adds a soft delete filter to the query and performs a find-and-update operation
-func (m *SoftDeleteMiddleware) FindOneAndUpdate(ctx context.Context, filter interface{}, update interface{}, opts ...*options.FindOneAndUpdateOptions) *mongo.SingleResult {
+func (m *SoftDeleteMiddleware) FindOneAndUpdate(ctx context.Context, filter interface{}, update interface{}, opts ...options.Lister[options.FindOneAndUpdateOptions]) *mongo.SingleResult {
 	filter = m.addSoftDeleteFilter(filter)
 	return m.Collection.FindOneAndUpdate(ctx, filter, update, opts...)
 }
 
 // InsertOne inserts a single document into the collection
-func (m *SoftDeleteMiddleware) InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error) {
+func (m *SoftDeleteMiddleware) InsertOne(ctx context.Context, document interface{}, opts ...options.Lister[options.InsertOneOptions]) (*mongo.InsertOneResult, error) {
 	return m.Collection.InsertOne(ctx, document, opts...)
 }
 
 // InsertMany inserts multiple documents into the collection
-func (m *SoftDeleteMiddleware) InsertMany(ctx context.Context, documents []interface{}, opts ...*options.InsertManyOptions) (*mongo.InsertManyResult, error) {
+func (m *SoftDeleteMiddleware) InsertMany(ctx context.Context, documents any, opts ...options.Lister[options.InsertManyOptions]) (*mongo.InsertManyResult, error) {
 	return m.Collection.InsertMany(ctx, documents, opts...)
 }
 
@@ -167,10 +165,10 @@ func (m *SoftDeleteMiddleware) addSoftDeleteFilter(filter interface{}) interface
 }
 
 // createSoftDeleteUpdate creates the update payload for a soft delete operation. It sets the deleted field to true and adds the deletedAt timestamp. If deletedBy is provided, it also sets the deletedBy field.
-func (m *SoftDeleteMiddleware) createSoftDeleteUpdate(deletedBy primitive.ObjectID) bson.M {
+func (m *SoftDeleteMiddleware) createSoftDeleteUpdate(deletedBy bson.ObjectID) bson.M {
 	softDeletionPayload := bson.M{
 		"deleted":   true,
-		"deletedAt": primitive.NewDateTimeFromTime(time.Now()),
+		"deletedAt": bson.NewDateTimeFromTime(time.Now()),
 	}
 
 	// handling when deletedBy is provided
